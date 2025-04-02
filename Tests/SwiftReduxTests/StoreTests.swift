@@ -7,7 +7,7 @@
 
 import Testing
 
-@testable import Redux
+@testable import SwiftRedux
 
 @Suite
 @MainActor

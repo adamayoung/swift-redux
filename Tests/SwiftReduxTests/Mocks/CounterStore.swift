@@ -1,11 +1,11 @@
 //
 //  CounterStore.swift
-//  Redux
+//  SwiftRedux
 //
 //  Created by Adam Young on 02/04/2025.
 //
 
 import Foundation
-import Redux
+import SwiftRedux
 
 typealias CounterStore = Store<CounterState, CounterAction>

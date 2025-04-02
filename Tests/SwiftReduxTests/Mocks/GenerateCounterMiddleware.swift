@@ -1,12 +1,12 @@
 //
 //  GenerateCounterMiddleware.swift
-//  Redux
+//  SwiftRedux
 //
 //  Created by Adam Young on 02/04/2025.
 //
 
 import Foundation
-import Redux
+import SwiftRedux
 
 actor GenerateCounterMiddleware: Middleware {
 
