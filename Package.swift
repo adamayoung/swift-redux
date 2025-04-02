@@ -15,12 +15,12 @@ let package = Package(
     ],
 
     products: [
-        .library(name: "Redux", targets: ["Redux"])
+        .library(name: "SwiftRedux", targets: ["SwiftRedux"])
     ],
 
     targets: [
-        .target(name: "Redux"),
-        .testTarget(name: "ReduxTests", dependencies: ["Redux"])
+        .target(name: "SwiftRedux"),
+        .testTarget(name: "SwiftReduxTests", dependencies: ["SwiftRedux"])
     ]
 
 )

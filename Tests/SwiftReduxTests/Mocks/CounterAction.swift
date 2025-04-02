@@ -1,6 +1,6 @@
 //
 //  CounterAction.swift
-//  AsyncRedux
+//  SwiftRedux
 //
 //  Created by Adam Young on 02/04/2025.
 //
