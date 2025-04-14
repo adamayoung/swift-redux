@@ -10,18 +10,19 @@ import SwiftRedux
 
 struct CounterReducer: Reducer {
 
-    func reduce(_ oldState: CounterState, with action: CounterAction) -> CounterState {
+    func reduce(
+        _ oldState: CounterState,
+        with action: CounterAction
+    ) -> CounterState {
         var state = oldState
 
         switch action {
-        case .increment:
-            state.count += 1
-
-        case .decrement:
-            state.count -= 1
-
         case .setCount(let count):
             state.count = count
+            state.canDecrement = count > 0
+
+        case .setNumberFact(let fact):
+            state.fact = fact
 
         case .setAlertPresented(let isPresented):
             state.isAlertPresented = isPresented

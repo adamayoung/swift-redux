@@ -8,18 +8,38 @@
 import Foundation
 import SwiftRedux
 
-actor CounterMiddleware: Middleware {
+struct CounterMiddleware: Middleware {
+
+    private let counterService: any CounterService
+
+    init(counterService: any CounterService) {
+        self.counterService = counterService
+    }
 
     func run(_ state: CounterState, with action: CounterAction) async -> CounterAction? {
         switch action {
-        case .random:
-            try? await Task.sleep(for: .milliseconds(Int.random(in: 0...500)))
-            guard !Task.isCancelled else {
+        case .increment:
+            let count = state.count + 1
+            return .setCount(count)
+
+        case .decrement:
+            guard state.count > 0 else {
                 return nil
             }
 
-            let count = Int.random(in: 0...500)
+            let count = state.count - 1
             return .setCount(count)
+
+        case .random:
+            let count = await counterService.generateRandomNumber()
+            return .setCount(count)
+
+        case .setCount:
+            return .fetchNumberFact
+
+        case .fetchNumberFact:
+            let fact = await counterService.numberFact(for: state.count)
+            return .setNumberFact(fact)
 
         default:
             return nil

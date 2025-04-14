@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct ReduxExampleApp: App {
+
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
     }
+
 }

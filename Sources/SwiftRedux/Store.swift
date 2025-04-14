@@ -42,6 +42,11 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         self.middlewares = middlewares
     }
 
+    ///
+    /// - Parameter dynamicMember: Key path for state value.
+    ///
+    /// - Returns: Value of state.
+    ///
     public subscript<Value>(dynamicMember keyPath: KeyPath<State, Value>) -> Value {
         self.state[keyPath: keyPath]
     }
@@ -80,12 +85,15 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         ///   - action: The action to perform.
         ///   - transaction: A transaction.
         ///
-        public func send(_ action: Action, transaction: Transaction) async {
-            withTransaction(transaction) {
+        public func send(
+            _ action: Action,
+            transaction: @autoclosure @Sendable @MainActor @escaping () -> Transaction
+        ) async {
+            withTransaction(transaction()) {
                 apply(action)
             }
 
-            await intercept(action)
+            await intercept(action, transaction: transaction)
         }
 
     }
@@ -100,7 +108,10 @@ extension Store {
         }
     }
 
-    private func intercept(_ action: Action) async {
+    private func intercept(
+        _ action: Action,
+        transaction: (@Sendable @MainActor () -> Transaction)? = nil
+    ) async {
         await withDiscardingTaskGroup { group in
             for middleware in middlewares {
                 group.addTask {
@@ -112,7 +123,11 @@ extension Store {
                         return
                     }
 
-                    await self.send(nextAction)
+                    if let transaction {
+                        await self.send(nextAction, transaction: transaction())
+                    } else {
+                        await self.send(nextAction)
+                    }
                 }
             }
         }
@@ -137,16 +152,12 @@ extension Store {
             embed: @escaping (Value) -> Action
         ) -> Binding<Value> {
             .init(
-                get: { extract(self.state) },
+                get: {
+                    extract(self.state)
+                },
                 set: { newValue, transaction in
-                    let action = embed(newValue)
-
-                    withTransaction(transaction) {
-                        self.apply(action)
-                    }
-
                     Task {
-                        await self.intercept(action)
+                        await self.send(embed(newValue), transaction: transaction)
                     }
                 }
             )

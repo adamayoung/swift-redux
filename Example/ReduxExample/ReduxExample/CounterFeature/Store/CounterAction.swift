@@ -7,12 +7,14 @@
 
 import Foundation
 
-enum CounterAction: Sendable {
+enum CounterAction: Sendable, Equatable {
 
     case increment
     case decrement
     case random
     case setCount(Int)
+    case fetchNumberFact
+    case setNumberFact(String?)
     case setAlertPresented(Bool)
 
 }
