@@ -5,6 +5,8 @@
 //  Created by Adam Young on 02/04/2025.
 //
 
+import Foundation
+
 ///
 /// A protocol to mutate state depending on an action.
 ///
