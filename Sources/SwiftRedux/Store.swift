@@ -156,8 +156,14 @@ extension Store {
                     extract(self.state)
                 },
                 set: { newValue, transaction in
+                    let action = embed(newValue)
+
+                    withTransaction(transaction) {
+                        self.apply(action)
+                    }
+
                     Task {
-                        await self.send(embed(newValue), transaction: transaction)
+                        await self.intercept(action, transaction: { transaction })
                     }
                 }
             )
