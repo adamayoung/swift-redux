@@ -8,6 +8,10 @@
 import Foundation
 import Observation
 
+#if canImport(SwiftUI)
+    import SwiftUI
+#endif
+
 ///
 /// A store holding state allowing actions to be sent to it.
 ///
@@ -43,7 +47,7 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
     }
 
     ///
-    /// Mutates the state of the store with an action.
+    /// Sends an action to the store.
     ///
     /// - Parameter action: The action to perform.
     ///
@@ -53,6 +57,39 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
     }
 
 }
+
+#if canImport(SwiftUI)
+    extension Store {
+
+        ///
+        /// Sends an action to the store with a given animation.
+        ///
+        /// - Parameters:
+        ///   - action: The action to perform.
+        ///   - animation: An animation.
+        ///
+        public func send(_ action: Action, animation: Animation?) async {
+            let transaction = Transaction(animation: animation)
+            await send(action, transaction: transaction)
+        }
+
+        ///
+        /// Sends an action to the store with a given transaction.
+        ///
+        /// - Parameters:
+        ///   - action: The action to perform.
+        ///   - transaction: A transaction.
+        ///
+        public func send(_ action: Action, transaction: Transaction) async {
+            withTransaction(transaction) {
+                apply(action)
+            }
+
+            await intercept(action)
+        }
+
+    }
+#endif
 
 extension Store {
 
@@ -71,6 +108,10 @@ extension Store {
                         return
                     }
 
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
                     await self.send(nextAction)
                 }
             }
@@ -80,8 +121,6 @@ extension Store {
 }
 
 #if canImport(SwiftUI)
-    import SwiftUI
-
     extension Store {
 
         ///
