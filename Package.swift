@@ -15,12 +15,26 @@ let package = Package(
     ],
 
     products: [
-        .library(name: "SwiftRedux", targets: ["SwiftRedux"])
+        .library(
+            name: "SwiftRedux", targets: ["SwiftRedux"])
     ],
 
     targets: [
-        .target(name: "SwiftRedux"),
-        .testTarget(name: "SwiftReduxTests", dependencies: ["SwiftRedux"])
+        .target(
+            name: "SwiftRedux",
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency"),
+                .enableUpcomingFeature("ExistentialAny")
+            ]
+        ),
+        .testTarget(
+            name: "SwiftReduxTests",
+            dependencies: ["SwiftRedux"],
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency"),
+                .enableUpcomingFeature("ExistentialAny")
+            ]
+        )
     ]
 
 )
