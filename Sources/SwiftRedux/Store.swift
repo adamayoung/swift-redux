@@ -75,7 +75,7 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         ///
         public func send(_ action: Action, animation: Animation?) async {
             let transaction = Transaction(animation: animation)
-            await send(action, transaction: { transaction }())
+            await send(action, transaction: transaction)
         }
 
         ///
