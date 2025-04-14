@@ -8,8 +8,8 @@
 import Foundation
 import Observation
 
-#if canImport(SwiftUICore)
-    import SwiftUICore
+#if canImport(SwiftUI)
+    import SwiftUI
 #endif
 
 ///
@@ -58,7 +58,7 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
 
 }
 
-#if canImport(SwiftUICore)
+#if canImport(SwiftUI)
     extension Store {
 
         ///
@@ -120,7 +120,7 @@ extension Store {
 
 }
 
-#if canImport(SwiftUICore)
+#if canImport(SwiftUI)
     extension Store {
 
         ///
