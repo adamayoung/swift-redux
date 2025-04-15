@@ -85,11 +85,12 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         ///   - action: The action to perform.
         ///   - transaction: A transaction.
         ///
+        @MainActor
         public func send(
             _ action: Action,
-            transaction: @autoclosure @Sendable @MainActor @escaping () -> Transaction
+            transaction: Transaction
         ) async {
-            withTransaction(transaction()) {
+            withTransaction(transaction) {
                 apply(action)
             }
 
@@ -110,25 +111,21 @@ extension Store {
 
     private func intercept(
         _ action: Action,
-        transaction: (@Sendable @MainActor () -> Transaction)? = nil
+        transaction: Transaction? = nil
     ) async {
-        await withDiscardingTaskGroup { group in
-            for middleware in middlewares {
-                group.addTask {
-                    guard let nextAction = await middleware.run(self.state, with: action) else {
-                        return
-                    }
+        for middleware in middlewares {
+            guard let nextAction = await middleware.run(self.state, with: action) else {
+                return
+            }
 
-                    guard !Task.isCancelled else {
-                        return
-                    }
+            guard !Task.isCancelled else {
+                return
+            }
 
-                    if let transaction {
-                        await self.send(nextAction, transaction: transaction())
-                    } else {
-                        await self.send(nextAction)
-                    }
-                }
+            if let transaction {
+                await self.send(nextAction, transaction: transaction)
+            } else {
+                await self.send(nextAction)
             }
         }
     }
@@ -163,7 +160,7 @@ extension Store {
                     }
 
                     Task {
-                        await self.intercept(action, transaction: { transaction })
+                        await self.intercept(action, transaction: transaction)
                     }
                 }
             )
