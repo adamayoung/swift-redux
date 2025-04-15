@@ -22,18 +22,18 @@ let package = Package(
     targets: [
         .target(
             name: "SwiftRedux"
-//            swiftSettings: [
-//                .enableExperimentalFeature("StrictConcurrency"),
-//                .enableUpcomingFeature("ExistentialAny")
-//            ]
+                //            swiftSettings: [
+                //                .enableExperimentalFeature("StrictConcurrency"),
+                //                .enableUpcomingFeature("ExistentialAny")
+                //            ]
         ),
         .testTarget(
             name: "SwiftReduxTests",
             dependencies: ["SwiftRedux"]
-//            swiftSettings: [
-//                .enableExperimentalFeature("StrictConcurrency"),
-//                .enableUpcomingFeature("ExistentialAny")
-//            ]
+            //            swiftSettings: [
+            //                .enableExperimentalFeature("StrictConcurrency"),
+            //                .enableUpcomingFeature("ExistentialAny")
+            //            ]
         )
     ]
 

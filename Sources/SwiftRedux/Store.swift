@@ -117,11 +117,11 @@ extension Store {
             guard let nextAction = await middleware.run(self.state, with: action) else {
                 return
             }
-            
+
             guard !Task.isCancelled else {
                 return
             }
-            
+
             if let transaction {
                 await self.send(nextAction, transaction: transaction)
             } else {
