@@ -19,6 +19,9 @@ struct CounterView: View {
                 middlewares: [
                     CounterMiddleware(
                         counterService: ExampleCounterService()
+                    ),
+                    NumberFactMiddleware(
+                        counterService: ExampleCounterService()
                     )
                 ]
             )
