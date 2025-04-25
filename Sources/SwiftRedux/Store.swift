@@ -92,7 +92,6 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         ///   - action: The action to perform.
         ///   - transaction: A transaction.
         ///
-        @MainActor
         public func send(_ action: Action, transaction: Transaction) async {
             logger?.debug("Sending \(String(describing: action))")
 
@@ -117,23 +116,22 @@ extension Store {
         }
     }
 
-    private func intercept(
-        _ action: Action,
-        transaction: Transaction? = nil
-    ) async {
-        for middleware in middlewares {
-            guard let nextAction = await middleware.run(self.state, with: action) else {
-                return
-            }
+    private func intercept(_ action: Action, transaction: Transaction? = nil) async {
+        Task {
+            for middleware in middlewares {
+                guard let nextAction = await middleware.run(self.state, with: action) else {
+                    return
+                }
 
-            guard !Task.isCancelled else {
-                return
-            }
+                guard !Task.isCancelled else {
+                    return
+                }
 
-            if let transaction {
-                await self.send(nextAction, transaction: transaction)
-            } else {
-                await self.send(nextAction)
+                if let transaction {
+                    await self.send(nextAction, transaction: transaction)
+                } else {
+                    await self.send(nextAction)
+                }
             }
         }
     }
@@ -182,30 +180,30 @@ extension Store {
         let oldStateMirror = Mirror(reflecting: oldState)
         let newStateMirror = Mirror(reflecting: newState)
 
-        var changes: [(label: String, oldValue: String, newValue: String)] = []
+        var changes: [(label: String, oldValue: String, newValue: String, changeType: String)] = []
 
-        func santize(_ value: Any) -> String {
+        func sanitize(_ value: Any) -> String {
             var valueAsString = String(describing: value)
-
             if valueAsString.hasPrefix("Optional(") {
                 valueAsString = String(valueAsString.dropFirst("Optional(".count).dropLast(1))
             }
-
             return valueAsString
         }
 
         for (oldChild, newChild) in zip(oldStateMirror.children, newStateMirror.children) {
-            let label = santize(oldChild.label ?? "")
-            let oldValue = santize(oldChild.value)
-            let newValue = santize(newChild.value)
+            let label = sanitize(oldChild.label ?? "")
+            let oldValue = sanitize(oldChild.value)
+            let newValue = sanitize(newChild.value)
 
             if oldValue != newValue {
-                changes.append((label, oldValue, newValue))
+                let changeType = oldValue.isEmpty ? "Added" : newValue.isEmpty ? "Removed" : "Updated"
+                changes.append((label, oldValue, newValue, changeType))
             }
         }
 
-        let summary = changes.map { "\($0.label)\n\t- \($0.oldValue)\n\t+ \($0.newValue)" }
-            .joined(separator: "\n")
+        let summary = changes.map {
+            "\($0.label) (\($0.changeType))\n\t- \($0.oldValue)\n\t+ \($0.newValue)"
+        }.joined(separator: "\n")
 
         return summary
     }
