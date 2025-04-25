@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import os
 
 struct CounterView: View {
 
@@ -23,7 +24,8 @@ struct CounterView: View {
                     NumberFactMiddleware(
                         counterService: ExampleCounterService()
                     )
-                ]
+                ],
+                logger: Logger(subsystem: "uk.co.adam-young.ReduxExample", category: "CounterStore")
             )
         )
     }
