@@ -7,6 +7,7 @@
 
 import Foundation
 import Observation
+import os
 
 #if canImport(SwiftUI)
     import SwiftUI
@@ -23,6 +24,7 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
     private var state: State
     private let reducer: any Reducer<State, Action>
     private let middlewares: [any Middleware<State, Action>]
+    private let logger: Logger?
 
     ///
     /// Initialises a new store.
@@ -31,15 +33,18 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
     ///   - initialState: The initial state.
     ///   - reducer: The store's reducer.
     ///   - middlewares: A list of middlewares.
+    ///   - logger: Optional logger.
     ///
     public init(
         initialState: State,
         reducer: any Reducer<State, Action>,
-        middlewares: [any Middleware<State, Action>] = []
+        middlewares: [any Middleware<State, Action>] = [],
+        logger: Logger? = nil
     ) {
         self.state = initialState
         self.reducer = reducer
         self.middlewares = middlewares
+        self.logger = logger
     }
 
     ///
@@ -57,6 +62,8 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
     /// - Parameter action: The action to perform.
     ///
     public func send(_ action: Action) async {
+        logger?.debug("Sending \(String(describing: action))")
+
         apply(action)
         await intercept(action)
     }
@@ -86,10 +93,9 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         ///   - transaction: A transaction.
         ///
         @MainActor
-        public func send(
-            _ action: Action,
-            transaction: Transaction
-        ) async {
+        public func send(_ action: Action, transaction: Transaction) async {
+            logger?.debug("Sending \(String(describing: action))")
+
             withTransaction(transaction) {
                 apply(action)
             }
@@ -105,6 +111,8 @@ extension Store {
     private func apply(_ action: Action) {
         let newState = reducer.reduce(state, with: action)
         if newState != state {
+            let summary = Self.summaryOfChanges(between: self.state, and: newState)
+            logger?.debug("State changed:\n\(summary)")
             state = newState
         }
     }
@@ -167,3 +175,39 @@ extension Store {
         }
     }
 #endif
+
+extension Store {
+
+    private static func summaryOfChanges(between oldState: State, and newState: State) -> String {
+        let oldStateMirror = Mirror(reflecting: oldState)
+        let newStateMirror = Mirror(reflecting: newState)
+
+        var changes: [(label: String, oldValue: String, newValue: String)] = []
+
+        func santize(_ value: Any) -> String {
+            var valueAsString = String(describing: value)
+
+            if valueAsString.hasPrefix("Optional(") {
+                valueAsString = String(valueAsString.dropFirst("Optional(".count).dropLast(1))
+            }
+
+            return valueAsString
+        }
+
+        for (oldChild, newChild) in zip(oldStateMirror.children, newStateMirror.children) {
+            let label = santize(oldChild.label ?? "")
+            let oldValue = santize(oldChild.value)
+            let newValue = santize(newChild.value)
+
+            if oldValue != newValue {
+                changes.append((label, oldValue, newValue))
+            }
+        }
+
+        let summary = changes.map { "\($0.label)\n\t- \($0.oldValue)\n\t+ \($0.newValue)" }
+            .joined(separator: "\n")
+
+        return summary
+    }
+
+}
