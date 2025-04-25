@@ -195,7 +195,7 @@ extension Store {
         }
 
         for (oldChild, newChild) in zip(oldStateMirror.children, newStateMirror.children) {
-            let label = santize(oldChild.label)
+            let label = santize(oldChild.label ?? "")
             let oldValue = santize(oldChild.value)
             let newValue = santize(newChild.value)
 
