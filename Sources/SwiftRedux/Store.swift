@@ -185,7 +185,7 @@ extension Store {
         var changes: [(label: String, oldValue: String, newValue: String)] = []
 
         func santize(_ value: Any) -> String {
-            var valueAsString = String(describing: value ?? "")
+            var valueAsString = String(describing: value)
 
             if valueAsString.hasPrefix("Optional(") {
                 valueAsString = String(valueAsString.dropFirst("Optional(".count).dropLast(1))
