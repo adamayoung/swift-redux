@@ -7,11 +7,8 @@
 
 import Foundation
 import Observation
+import SwiftUI
 import os
-
-#if canImport(SwiftUI)
-    import SwiftUI
-#endif
 
 ///
 /// A store holding state allowing actions to be sent to it.
@@ -21,10 +18,11 @@ import os
 @MainActor
 public final class Store<State: Equatable & Sendable, Action: Sendable> {
 
-    private var state: State
-    private let reducer: any Reducer<State, Action>
-    private let middlewares: [any Middleware<State, Action>]
+    var state: State
+    let reducer: any Reducer<State, Action>
+    let middlewares: [any Middleware<State, Action>]
     private let logger: Logger?
+    private let signposter: OSSignposter?
 
     ///
     /// Initialises a new store.
@@ -45,6 +43,13 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         self.reducer = reducer
         self.middlewares = middlewares
         self.logger = logger
+        self.signposter = {
+            guard let logger else {
+                return nil
+            }
+
+            return OSSignposter(logger: logger)
+        }()
     }
 
     ///
@@ -56,158 +61,151 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         self.state[keyPath: keyPath]
     }
 
+}
+
+extension Store {
+
     ///
     /// Sends an action to the store.
     ///
     /// - Parameter action: The action to perform.
     ///
     public func send(_ action: Action) async {
-        logger?.debug("Sending \(String(describing: action))")
+        await send(action, transaction: nil)
+    }
 
-        apply(action)
-        await intercept(action)
+    ///
+    /// Sends an action to the store with a given animation.
+    ///
+    /// - Parameters:
+    ///   - action: The action to perform.
+    ///   - animation: An animation.
+    ///
+    public func send(_ action: Action, animation: Animation?) async {
+        let transaction = Transaction(animation: animation)
+        await send(action, transaction: transaction)
+    }
+
+    ///
+    /// Sends an action to the store with a given transaction.
+    ///
+    /// - Parameters:
+    ///   - action: The action to perform.
+    ///   - transaction: A transaction.
+    ///
+    public func send(_ action: Action, transaction: Transaction?) async {
+        let label = String(describing: action)
+        let signpostID = signposter?.makeSignpostID()
+        let signpostIntervalState: OSSignpostIntervalState?
+        let signpostIntervalName: StaticString = "Send action"
+
+        if let signposter, let signpostID {
+            signpostIntervalState = signposter.beginInterval(
+                signpostIntervalName,
+                id: signpostID,
+                "\(label)"
+            )
+        } else {
+            signpostIntervalState = nil
+        }
+
+        let traceID = StoreContext.actionTraceID ?? UUID()
+
+        let start = Date()
+        await StoreContext.$actionTraceID.withValue(traceID) {
+            await StoreContext.$actionDepth.withValue(StoreContext.actionDepth + 1) {
+                logger?.debug(
+                    "Sending action '\(label)' to '\(String(describing: type(of: self)))', depth: \(StoreContext.actionDepth)"
+                )
+
+                if let transaction {
+                    withTransaction(transaction) {
+                        apply(action)
+                    }
+                } else {
+                    apply(action)
+                }
+
+                await intercept(action, transaction: transaction, signpostID: signpostID)
+            }
+        }
+
+        let duration = Date().timeIntervalSince(start)
+
+        if let signposter, let signpostIntervalState {
+            signposter.endInterval(signpostIntervalName, signpostIntervalState)
+        }
+
+        logger?.info(
+            "Action '\(label)' fully processed in \(duration, format: .fixed(precision: 3))s"
+        )
     }
 
 }
 
-#if canImport(SwiftUI)
-    extension Store {
-
-        ///
-        /// Sends an action to the store with a given animation.
-        ///
-        /// - Parameters:
-        ///   - action: The action to perform.
-        ///   - animation: An animation.
-        ///
-        public func send(_ action: Action, animation: Animation?) async {
-            let transaction = Transaction(animation: animation)
-            await send(action, transaction: transaction)
-        }
-
-        ///
-        /// Sends an action to the store with a given transaction.
-        ///
-        /// - Parameters:
-        ///   - action: The action to perform.
-        ///   - transaction: A transaction.
-        ///
-        @MainActor
-        public func send(_ action: Action, transaction: Transaction) async {
-            logger?.debug("Sending \(String(describing: action))")
-
-            withTransaction(transaction) {
-                apply(action)
-            }
-
-            await intercept(action, transaction: transaction)
-        }
-
-    }
-#endif
-
 extension Store {
 
-    private func apply(_ action: Action) {
+    func apply(_ action: Action) {
         let newState = reducer.reduce(state, with: action)
-        if newState != state {
-            let summary = Self.summaryOfChanges(between: self.state, and: newState)
-            logger?.debug("State changed:\n\(summary)")
-            state = newState
+        guard newState != state else {
+            return
         }
+
+        let summary = Self.summaryOfChanges(between: self.state, and: newState)
+        logger?.debug("State changed:\n\(summary)")
+        state = newState
+    }
+
+    func intercept(_ action: Action, transaction: Transaction? = nil, signpostID: OSSignpostID?)
+        async
+    {
+        await Task {
+            for middleware in middlewares {
+                let label = "\(String(describing: middleware.self))"
+                if let signposter, let signpostID {
+                    signposter.emitEvent("Middleware intercept", id: signpostID, "\(label)")
+                }
+
+                await intercept(action, using: middleware, transaction: transaction)
+
+                if let signposter, let signpostID {
+                    signposter.emitEvent("Middleware finished", id: signpostID, "\(label)")
+                }
+
+                guard !Task.isCancelled else { return }
+            }
+        }.value
     }
 
     private func intercept(
         _ action: Action,
+        using middleware: some Middleware<State, Action>,
         transaction: Transaction? = nil
     ) async {
-        for middleware in middlewares {
-            guard let nextAction = await middleware.run(self.state, with: action) else {
-                return
-            }
+        guard let nextAction = await middleware.run(self.state, with: action) else {
+            return
+        }
 
-            guard !Task.isCancelled else {
-                return
-            }
+        logger?.debug(
+            "Middleware '\(String(describing: type(of: middleware)))' intercepted action: '\(String(describing: action))'"
+        )
 
-            if let transaction {
-                await self.send(nextAction, transaction: transaction)
-            } else {
-                await self.send(nextAction)
-            }
+        guard !Task.isCancelled else { return }
+
+        logger?.debug(
+            "Middleware '\(String(describing: type(of: middleware)))' returned next action: '\(String(describing: nextAction))'"
+        )
+
+        if let transaction {
+            await self.send(nextAction, transaction: transaction)
+        } else {
+            await self.send(nextAction)
         }
     }
 
 }
 
-#if canImport(SwiftUI)
-    extension Store {
-
-        ///
-        /// Creates a binding for any property in the store's state.
-        ///
-        /// - Parameters:
-        ///   - extract: The property to bind to.
-        ///   - embed: The action to set the property.
-        ///
-        /// - Returns: A `SwiftUI.Binding` for the property.
-        ///
-        public func binding<Value>(
-            extract: @escaping (State) -> Value,
-            embed: @escaping (Value) -> Action
-        ) -> Binding<Value> {
-            .init(
-                get: {
-                    extract(self.state)
-                },
-                set: { newValue, transaction in
-                    let action = embed(newValue)
-
-                    withTransaction(transaction) {
-                        self.apply(action)
-                    }
-
-                    Task {
-                        await self.intercept(action, transaction: transaction)
-                    }
-                }
-            )
-        }
-    }
-#endif
-
-extension Store {
-
-    private static func summaryOfChanges(between oldState: State, and newState: State) -> String {
-        let oldStateMirror = Mirror(reflecting: oldState)
-        let newStateMirror = Mirror(reflecting: newState)
-
-        var changes: [(label: String, oldValue: String, newValue: String)] = []
-
-        func santize(_ value: Any) -> String {
-            var valueAsString = String(describing: value)
-
-            if valueAsString.hasPrefix("Optional(") {
-                valueAsString = String(valueAsString.dropFirst("Optional(".count).dropLast(1))
-            }
-
-            return valueAsString
-        }
-
-        for (oldChild, newChild) in zip(oldStateMirror.children, newStateMirror.children) {
-            let label = santize(oldChild.label ?? "")
-            let oldValue = santize(oldChild.value)
-            let newValue = santize(newChild.value)
-
-            if oldValue != newValue {
-                changes.append((label, oldValue, newValue))
-            }
-        }
-
-        let summary = changes.map { "\($0.label)\n\t- \($0.oldValue)\n\t+ \($0.newValue)" }
-            .joined(separator: "\n")
-
-        return summary
-    }
-
+enum StoreContext {
+    @TaskLocal static var actionTraceID: UUID?
+    @TaskLocal static var actionDepth: Int = 0
 }

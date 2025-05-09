@@ -18,8 +18,8 @@ struct CounterReducer: Reducer {
 
         switch action {
         case .setCount(let count):
-            state.count = count
-            state.canDecrement = count > 0
+            state.count = max(0, count)
+            state.canDecrement = state.count > 0
 
         case .setNumberFact(let fact):
             state.fact = fact
