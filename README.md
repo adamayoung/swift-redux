@@ -1,6 +1,6 @@
 # Swift Redux
 
-Redux implemented in Swift using Swift Concurrency and Generics.
+Redux implemented in Swift using Swift Concurrency and Combine.
 
 ## Example usage
 
