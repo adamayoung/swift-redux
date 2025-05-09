@@ -10,6 +10,10 @@ import Observation
 import SwiftUI
 import os
 
+#if canImport(Combine)
+    import Combine
+#endif
+
 ///
 /// A store holding state allowing actions to be sent to it.
 ///
@@ -18,9 +22,27 @@ import os
 @MainActor
 public final class Store<State: Equatable & Sendable, Action: Sendable> {
 
-    var state: State
-    let reducer: any Reducer<State, Action>
-    let middlewares: [any Middleware<State, Action>]
+    var state: State {
+        didSet {
+            #if canImport(Combine)
+                stateSubject.send(state)
+            #endif
+        }
+    }
+
+    #if canImport(Combine)
+        ///
+        /// A combine publisher for `state`.
+        ///
+        public var statePublisher: AnyPublisher<State, Never> {
+            stateSubject.eraseToAnyPublisher()
+        }
+
+        private var stateSubject: CurrentValueSubject<State, Never>
+    #endif
+
+    private let reducer: any Reducer<State, Action>
+    private let middlewares: [any Middleware<State, Action>]
     private let logger: Logger?
     private let signposter: OSSignposter?
 
@@ -40,6 +62,7 @@ public final class Store<State: Equatable & Sendable, Action: Sendable> {
         logger: Logger? = nil
     ) {
         self.state = initialState
+        self.stateSubject = CurrentValueSubject(initialState)
         self.reducer = reducer
         self.middlewares = middlewares
         self.logger = logger
@@ -156,9 +179,11 @@ extension Store {
         state = newState
     }
 
-    func intercept(_ action: Action, transaction: Transaction? = nil, signpostID: OSSignpostID?)
-        async
-    {
+    func intercept(
+        _ action: Action,
+        transaction: Transaction? = nil,
+        signpostID: OSSignpostID?
+    ) async {
         await Task {
             for middleware in middlewares {
                 let label = "\(String(describing: middleware.self))"
