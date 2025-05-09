@@ -5,6 +5,7 @@
 //  Created by Adam Young on 14/04/2025.
 //
 
+import SwiftRedux
 import SwiftUI
 import os
 
@@ -24,6 +25,7 @@ struct CounterView: View {
                     NumberFactMiddleware(
                         counterService: ExampleCounterService()
                     )
+
                 ],
                 logger: Logger(subsystem: "uk.co.adam-young.ReduxExample", category: "CounterStore")
             )
